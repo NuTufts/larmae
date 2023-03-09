@@ -1,7 +1,5 @@
 TRAIN_DATALOADER_CONFIG:
   INPUT_FILE: "test.list"
   VERBOSE: false
-  BATCHSIZE: 4
-  CROP_SIZE: 512
-  CONSTANT_SAMPLE: false
-  RANDOM_ACCESS: false
+  crop_size: 512
+

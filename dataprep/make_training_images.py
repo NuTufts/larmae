@@ -103,7 +103,7 @@ for ientry in range(start_entry,end_entry,1):
         raise ValueError("Number of images in this event is not 3?")
     
     for p in range(3):
-        np_img = np.transpose( larcv.as_ndarray( adc_v.at(p) ) ).astype(np.float)
+        np_img = np.transpose( larcv.as_ndarray( adc_v.at(p) ) ).astype(np.float32)
         x = larcv.NumpyArrayFloat( np_img )
         img_v.push_back( x )
         meta_v.push_back( adc_v.at(p).meta() )
