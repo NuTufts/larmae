@@ -1,3 +1,5 @@
 *~
 tmp.yaml
 *.root
+.ipynb_checkpoints/*
+__pycache__/*

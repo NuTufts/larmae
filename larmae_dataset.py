@@ -74,18 +74,21 @@ class larmaeDataset(torch.utils.data.Dataset):
                     data["entry"] = entry
 
                     tensor = torch.from_numpy( np.expand_dims(data["img_plane2"],axis=0) ) # expand to (1,1,H,W)
-                    #print("tensor: ",tensor.shape)
-                    patches = test.chunk( tensor ) # returns (1,num_patches,patchdim1*patchdim2)
-                    #print("patches: ",patches)
-                    patchsum = torch.sum(patches,2).squeeze() # (num_patches)
-                    #print("patchsum: ",patchsum)
-                    num_non_zero = (patchsum>10).sum().item() # float
-                    #print(num_non_zero)
-                    data["num_nonzero_patches"] = num_non_zero
-                    if num_non_zero >= self.nonzero_patch_threshold:
-                        cropok = True
-                        okentry = True
-                    
+
+                    with torch.no_grad():
+                        #print("tensor: ",tensor.shape)
+                        patches = self.chunk( tensor ) # returns (1,num_patches,patchdim1*patchdim2)
+                        #print("patches: ",patches)
+                        patchsum = torch.sum(patches,2).squeeze() # (num_patches)
+                        #print("patchsum: ",patchsum)
+                        num_non_zero = (patchsum>10).sum().item() # float
+                        #print(num_non_zero)
+                        data["num_nonzero_patches"] = num_non_zero
+                        if num_non_zero >= self.nonzero_patch_threshold:
+                            cropok = True
+                            okentry = True
+                    # scale
+                    data["img_plane2"] = np.clip( (data["img_plane2"]-40.0)/40.0, 0.0, 5.0 )
                     
             ioffset += 1
             num_tries += 1
@@ -129,7 +132,7 @@ larmaeDataset:
     with open('tmp.yaml','w') as f:
         print(cfg,file=f)
     
-    niter = 100
+    niter = 10
     batch_size = 4
     test = larmaeDataset( 'tmp.yaml' )
     print("NENTRIES: ",len(test))
@@ -159,7 +162,7 @@ larmaeDataset:
         #for b in range(y.shape[0]):
         #    print(" batch[",b,"]: non-zero patches = ",(y[b,:]>10).sum())
         #print(y.shape)
-        #print(batch["num_nonzero_patches"])
+        print(batch["num_nonzero_patches"])
         
     end = time.time()
     elapsed = end-start
