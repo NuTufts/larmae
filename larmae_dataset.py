@@ -88,7 +88,7 @@ class larmaeDataset(torch.utils.data.Dataset):
                             cropok = True
                             okentry = True
                     # scale
-                    data["img_plane2"] = np.clip( (data["img_plane2"]-40.0)/40.0, 0.0, 5.0 )
+                    data["img_plane2"] = np.clip( (data["img_plane2"]-50.0)/50.0, -1.0, 5.0 )
                     
             ioffset += 1
             num_tries += 1
