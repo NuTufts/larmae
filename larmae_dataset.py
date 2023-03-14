@@ -31,6 +31,7 @@ class larmaeDataset(torch.utils.data.Dataset):
         self.adc_threshold = self.cfg.get("adc_threshold",10.0)
         self.min_crop_pixels = self.cfg.get("min_crop_pixels",1000)
         self.patch_dims = self.cfg.get("patch_dims",16)
+        self.vector_index = self.cfg.get("vector_index",0)
         self.nonzero_patch_threshold = self.cfg.get("nonzero_patch_threshold",10) # our of 1024 patches for 512x512 image
         
         self.tree = rt.TChain("extbnb_images")
@@ -58,7 +59,7 @@ class larmaeDataset(torch.utils.data.Dataset):
                 entry = 0
                 ioffset = 0
             self.tree.GetEntry(entry)
-            img = self.tree.img_v.at(2).tonumpy()
+            img = self.tree.img_v.at(self.vector_index).tonumpy()
 
             cropok = False
             croptries = 0
@@ -70,10 +71,10 @@ class larmaeDataset(torch.utils.data.Dataset):
 
                 crop = img[x:x+self.cropsize,y:y+self.cropsize]
                 if (crop[crop>self.adc_threshold]).sum()>self.min_crop_pixels:
-                    data["img_plane2"] = np.expand_dims( crop, axis=0 ) # change to (1,H,W)
+                    data["img"] = np.expand_dims( crop, axis=0 ) # change to (1,H,W)
                     data["entry"] = entry
 
-                    tensor = torch.from_numpy( np.expand_dims(data["img_plane2"],axis=0) ) # expand to (1,1,H,W)
+                    tensor = torch.from_numpy( np.expand_dims(data["img"],axis=0) ) # expand to (1,1,H,W)
 
                     with torch.no_grad():
                         #print("tensor: ",tensor.shape)
@@ -88,7 +89,7 @@ class larmaeDataset(torch.utils.data.Dataset):
                             cropok = True
                             okentry = True
                     # scale
-                    data["img_plane2"] = np.clip( (data["img_plane2"]-50.0)/50.0, -1.0, 5.0 )
+                    data["img"] = np.clip( (data["img"]-50.0)/50.0, -1.0, 5.0 )
                     
             ioffset += 1
             num_tries += 1
@@ -157,7 +158,7 @@ larmaeDataset:
                 print("  ",name,"-[non-array]: ",type(d))
 
         # test the patch making routines
-        #x = test.chunk( batch['img_plane2'] )
+        #x = test.chunk( batch['img'] )
         #y = torch.sum(x,2)
         #for b in range(y.shape[0]):
         #    print(" batch[",b,"]: non-zero patches = ",(y[b,:]>10).sum())

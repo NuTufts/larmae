@@ -1,0 +1,7 @@
+larmaeDataset:
+  filelist:
+    - /cluster/tufts/wongjiradlabnu/twongj01/larmae/dataprep/data/mcc9_v29e_dl_run3_G1_extbnb_dlana/larmaedata_run3extbnb_0000.root
+  crop_size: 512
+  adc_threshold: 10.0
+  min_crop_pixels: 1000
+  vector_index: 0

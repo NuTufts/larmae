@@ -3,3 +3,4 @@ tmp.yaml
 *.root
 .ipynb_checkpoints/*
 __pycache__/*
+checkpoint*tar
