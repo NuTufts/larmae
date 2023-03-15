@@ -10,7 +10,8 @@ import yaml
 from torchvision import transforms, utils
 
 #sys.path.append("/home/twongjirad/working/larbys/larmae/vit-pytorch/")
-sys.path.append("/cluster/tufts/wongjiradlabnu/twongj01/larmae/vit-pytorch/")
+#sys.path.append("/cluster/tufts/wongjiradlabnu/twongj01/larmae/vit-pytorch/")
+sys.path.append("/n/home01/twongjirad/larmae/vit-pytorch/")
 from vit_pytorch import ViT, MAE
 
 from larmae_dataset import larmaeDataset
@@ -24,10 +25,10 @@ START_ITER = 0
 NITERS = 100000
 NITERS_PER_CHECKPOINT=10000
 WANDB_PROJECT="larmae-dev"
-LOG_WANDB = True
+LOG_WANDB = False
 LR = 1.0e-4
 weight_decay=1.0e-6
-batch_size = 10
+batch_size = 64
 NITERS_PER_LOG = 10
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']

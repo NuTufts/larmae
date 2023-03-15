@@ -42,10 +42,11 @@ class larmaeDataset(torch.utils.data.Dataset):
 
         self.nentries = self.tree.GetEntries()
         self._nloaded = 0
+        print("larmaeDataset created. TChain=",self.tree)
 
 
     def __getitem__(self, idx):
-        print("larmaeDataset.get[",idx,"]")
+        #print("larmaeDataset[",self,"].get[",idx,"]")
         worker_info = torch.utils.data.get_worker_info()
 
         okentry = False
