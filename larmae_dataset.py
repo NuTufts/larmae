@@ -54,7 +54,7 @@ class larmaeDataset(torch.utils.data.Dataset):
         ioffset = 0
         data = {}
         while not okentry:
-            okentry = True
+            okentry = False
             entry = idx+ioffset
             if entry>=self.nentries:
                 entry = 0
@@ -65,6 +65,7 @@ class larmaeDataset(torch.utils.data.Dataset):
             cropok = False
             croptries = 0
             while croptries<10 and not cropok:
+                croptries += 1
                 bounds_xmax = img.shape[0]-self.cropsize-1
                 bounds_ymax = img.shape[1]-self.cropsize-1
                 x = np.random.randint(0,bounds_xmax)
@@ -77,6 +78,7 @@ class larmaeDataset(torch.utils.data.Dataset):
 
                     tensor = torch.from_numpy( np.expand_dims(data["img"],axis=0) ) # expand to (1,1,H,W)
 
+                    # calc nonzero patches: determines if we return crop
                     with torch.no_grad():
                         #print("tensor: ",tensor.shape)
                         patches = self.chunk( tensor ) # returns (1,num_patches,patchdim1*patchdim2)
@@ -89,8 +91,9 @@ class larmaeDataset(torch.utils.data.Dataset):
                         if num_non_zero >= self.nonzero_patch_threshold:
                             cropok = True
                             okentry = True
-                    # scale
-                    data["img"] = np.clip( (data["img"]-50.0)/50.0, -1.0, 5.0 )
+
+                            # it's good, so make final scaled image
+                            data["img"] = np.clip( (data["img"]-20.0)/50.0, -1.0, 5.0 )
                     
             ioffset += 1
             num_tries += 1

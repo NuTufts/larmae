@@ -15,6 +15,7 @@ sys.path.append("/n/home01/twongjirad/larmae/vit-pytorch/")
 from vit_pytorch import ViT, MAE
 
 from larmae_dataset import larmaeDataset
+from larmae_mp_dataloader import larmaeMultiProcessDataloader
 
 from calc_accuracies import calc_zero_vs_nonzero_accuracy,calc_occupied_pixel_accuracies
 from utils import save_checkpoint
@@ -26,9 +27,10 @@ NITERS = 100000
 NITERS_PER_CHECKPOINT=10000
 WANDB_PROJECT="larmae-dev"
 LOG_WANDB = False
-LR = 1.0e-4
-weight_decay=1.0e-6
-batch_size = 64
+LR = 1.0e-6
+weight_decay=5.0e-2
+batch_size = 60
+num_workers=4
 NITERS_PER_LOG = 10
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
@@ -106,15 +108,17 @@ def run(gpu,args):
     sys.stdout.flush()
     torch.distributed.barrier()
 
-    dataset = larmaeDataset( args.config_file )
-    print("RANK-%d Start Data Loader. Number of entries: ",len(dataset))
+    loader = larmaeMultiProcessDataloader(args.config_file,batch_size,
+                                          num_workers=num_workers,
+	                                  prefetch_batches=1)
+    
+    print("RANK-%d Start Data Loader. Number of entries: ",len(loader))
     shuffle = True
 
     optimizer = torch.optim.AdamW(v.parameters(),
                                   lr=LR,
                                   weight_decay=weight_decay)
 
-    loader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,shuffle=shuffle)
 
     start = time.time()
     for iiter in range(START_ITER,START_ITER+NITERS):

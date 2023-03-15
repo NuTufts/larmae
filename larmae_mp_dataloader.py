@@ -12,7 +12,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
 
     shuffle = True
     dataset = {worker_idx: larmaeDataset( data_loader_config )}
-    #print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
+    print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
     torch.manual_seed( worker_idx )
     loader = {worker_idx: torch.utils.data.DataLoader(dataset[worker_idx],
                                                       #num_workers=0,
@@ -32,7 +32,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
             index = index_queue.get(timeout=1000)
 
             if index is None:
-                #print("worker[%d] saw index=None. Stop worker."%(worker_idx))
+                print("worker[%d] saw index=None. Stop worker."%(worker_idx))
                 sys.stdout.flush()
                 break
             
@@ -40,7 +40,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
                 #print("worker[",worker_idx,"] index[",index,"] using internal queue. len=",len(worker_index_queue))
                 x = worker_index_queue.pop()
             else:
-                #print("worker[",worker_idx,"] queue is empty, get new batch for idx=",index)
+                #print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
                 x = next(iter(loader[worker_idx]))
 
             #print("worker[%d] queueing index="%(worker_idx),index," with loader=",loader[worker_idx])                
@@ -77,8 +77,10 @@ class larmaeMultiProcessDataloader():
         self.prefetch_index = 0
         self.nentries = 0
         self.shuffle = True
+        self.data_keys = None
 
         self.data_loader_config = data_loader_config
+        self.dataset = larmaeDataset( data_loader_config )
                 
         for iworker in range(num_workers):
             index_queue = mp.Queue()
@@ -94,7 +96,7 @@ class larmaeMultiProcessDataloader():
         print("prefetch finished")
 
     def prefetch(self):
-        #print("prefetch")
+        print("prefetch")
         while (self.prefetch_index < self.batch_size):
             # if the prefetch_index hasn't reached the end of the dataset
             # and it is not 2 batches ahead, add indexes to the index queues
@@ -113,7 +115,10 @@ class larmaeMultiProcessDataloader():
         #    raise StopIteration
         print("next")
         out = [self.get() for _ in range(self.batch_size)]
-        return out
+        return self.collate_fn(out)
+
+    def __len__(self):
+        return len(self.dataset)
 
     def get(self):
         #print("start prefetch")
@@ -152,6 +157,25 @@ class larmaeMultiProcessDataloader():
             for w in self.workers:
                 if w.is_alive():
                     w.terminate()
+
+    def collate_fn(self,batch):
+        if self.data_keys is None:
+            self.data_keys = [k for k in batch[0].keys()]
+            print("set data keys: ",self.data_keys)
+            
+        out = {}
+        for b in self.data_keys:
+            if type(batch[0][b]) is torch.Tensor:
+                s = list(batch[0][b].shape)
+                #print("shape: ",s)
+                s[0] = len(batch)
+                x = torch.zeros( s )
+                for i,idata in enumerate(batch):
+                    #print("check: [",b,"][",i,"]: sum=",idata[b].sum())
+                    x[i] = idata[b]
+                out[b] = x
+            
+        return out
         
 if __name__ == "__main__":
     
@@ -179,7 +203,13 @@ if __name__ == "__main__":
         batch = next(iter(loader))
         dt_iter = time.time()-dt_iter
         dt_load += dt_iter
-        #print("batch: ",batch)
+
+        # Dump data for debug
+        if False:
+            print("batch: ",batch)
+            for ib in range(batch["img"].shape[0]):
+                print("img[",ib,"] check: ",batch["img"][ib,:].sum())
+                
         if FAKE_NET_RUNTIME>0:
             print("pretend network: lag=",FAKE_NET_RUNTIME)
             time.sleep( FAKE_NET_RUNTIME )
