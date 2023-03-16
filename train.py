@@ -17,6 +17,7 @@ from vit_pytorch import ViT, MAE
 from larmae_dataset import larmaeDataset
 from larmae_mp_dataloader import larmaeMultiProcessDataloader
 
+from lr_cosine_annealing import get_learning_rate_cosine_anealing_w_warmup
 from calc_accuracies import calc_zero_vs_nonzero_accuracy,calc_occupied_pixel_accuracies
 from utils import save_checkpoint
 
@@ -26,12 +27,19 @@ START_ITER = 0
 NITERS = 100000
 NITERS_PER_CHECKPOINT=10000
 WANDB_PROJECT="larmae-dev"
-LOG_WANDB = False
+LOG_WANDB = True
 LR = 1.0e-6
 weight_decay=5.0e-2
-batch_size = 60
+batch_size = 64
 num_workers=4
 NITERS_PER_LOG = 10
+Tbase = 1.0
+warmup_epochs = 1.0
+lr_min = 1.0e-6
+lr_max = 1.0e-4
+lr_warmup = 1.0e-6
+lr_decay_factor = 0.88
+nonzero_patchave_threshold = -0.4
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
 
@@ -111,25 +119,32 @@ def run(gpu,args):
     loader = larmaeMultiProcessDataloader(args.config_file,batch_size,
                                           num_workers=num_workers,
 	                                  prefetch_batches=1)
+    nentries = len(loader)
     
-    print("RANK-%d Start Data Loader. Number of entries: ",len(loader))
+    print("RANK-%d Start Data Loader. Number of entries: ",nentries)
     shuffle = True
 
+    
+    lr = LR
     optimizer = torch.optim.AdamW(v.parameters(),
-                                  lr=LR,
+                                  lr=lr,
                                   weight_decay=weight_decay)
 
 
     start = time.time()
     for iiter in range(START_ITER,START_ITER+NITERS):
+
+        epoch = float(iiter*batch_size)/float(nentries)
+        
         v.train()
         optimizer.zero_grad(set_to_none=True)
-        print("====================================")
-        print("ITER[%d]"%(iiter))
+        if rank==0:
+            print("====================================")
+            print("ITER[%d]"%(iiter))
     
         batch = next(iter(loader))
         imgs = batch["img"].to(DEVICE)
-        print("imgs: ",imgs.shape)
+        #print("imgs: ",imgs.shape)
     
         maeloss, pred_masked, true_masked, masked_indices = mae(imgs,return_outputs=True)
         #print(masked_indices.shape)
@@ -137,11 +152,20 @@ def run(gpu,args):
         #print(pred_masked.shape)
         #print(true_masked.shape)
     
-        print("Num nonzero patches: ",batch["num_nonzero_patches"])
-        print("MAE-loss: ",maeloss)
+        print("Rank[",rank,"] Num nonzero patches: ",batch["num_nonzero_patches"])
+        print("Rank[",rank,"] Entries: ",batch["entry"])
+        print("Rank[",rank,"] MAE-loss: ",maeloss)
         maeloss.backward()
         optimizer.step()
-        
+
+        # set the next learning rate
+        lr = get_learning_rate_cosine_anealing_w_warmup( epoch, Tbase, warmup_epochs,
+                                                         lr_min, lr_max, lr_warmup,
+                                                         lr_decay_factor )
+        # update the optimizer
+        for g in optimizer.param_groups:
+            g['lr'] = lr
+                
         if iiter%NITERS_PER_LOG==0:
             # Log information about this iteration
             logged = {}
@@ -149,10 +173,14 @@ def run(gpu,args):
             # accuracy calculations
             acc = {}
             with torch.no_grad():
-                acc_dict1 = calc_zero_vs_nonzero_accuracy( pred_masked.detach(), true_masked.detach() )
+                acc_dict1 = calc_zero_vs_nonzero_accuracy( pred_masked.detach(), 
+                                                           true_masked.detach(),
+                                                           nonzero_patchave_threshold )
                 acc.update(acc_dict1)
             
-                acc_dict2 = calc_occupied_pixel_accuracies( pred_masked.detach(), true_masked.detach() )
+                acc_dict2 = calc_occupied_pixel_accuracies( pred_masked.detach(), 
+                                                            true_masked.detach(),
+                                                            occupied_threshold=nonzero_patchave_threshold )
                 acc.update(acc_dict2)
 
             # grab items into 
@@ -161,6 +189,12 @@ def run(gpu,args):
 
             # add the MSE loss
             logged["loss"] = maeloss.detach().cpu().item()
+
+            # log the learning rate
+            logged["lr"] = lr
+
+            # log the epoch
+            logged["epoch"] = epoch
 
             # pass to wandb server
             if LOG_WANDB and rank==0:
@@ -173,6 +207,7 @@ def run(gpu,args):
                               "state_mae":mae.state_dict(),
                               "optimizer":optimizer.state_dict()},
                              False, iiter, tag="larmae" )
+
     
     
     end = time.time()

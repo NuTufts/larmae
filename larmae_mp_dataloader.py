@@ -11,7 +11,7 @@ from larmae_dataset import larmaeDataset
 
 def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_size):
 
-    shuffle = True
+    shuffle = False
     dataset = {worker_idx: larmaeDataset( data_loader_config, seed=worker_idx )}
     print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
 
@@ -23,9 +23,9 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
                                                       #num_workers=1,
                                                       #persistent_workers=True,
                                                       #sampler=sampler,
-                                                      batch_size=1,
-                                                      #worker_init_fn = lambda id: np.random.seed(id+iworker),
-                                                      shuffle=False)}
+                                                      batch_size=batch_size,
+                                                      worker_init_fn = lambda id: np.random.seed(id+iworker),
+                                                      shuffle=shuffle)}
     # internal batch queue
     worker_index_queue = []
     
@@ -35,18 +35,19 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
         try:
             # check for request for data
             #print("worker[",worker_idx,"] check request queue")
-            index = index_queue.get(timeout=0)
+            index = index_queue.get(timeout=0.01)
+            #index = index_queue.get()
 
             if index is None:
                 print("worker[%d] saw index=None. Stop worker."%(worker_idx))
-                sys.stdout.flush()
+                #sys.stdout.flush()
                 break
             
             if len(worker_index_queue)>0:
-                #print("worker[",worker_idx,"] index[",index,"] using internal queue. len=",len(worker_index_queue))
+                print("worker[",worker_idx,"] index[",index,"] using internal queue. len=",len(worker_index_queue))
                 x = worker_index_queue.pop()
             else:
-                #print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
+                print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
                 x = next(iter(loader[worker_idx]))
 
             #print("worker[%d] queueing index="%(worker_idx),index," with loader=",loader[worker_idx])                
@@ -56,12 +57,14 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
             
         except queue.Empty:
             #print("no request. fill worker queue")
-            if len(worker_index_queue)<batch_size:
+            #if len(worker_index_queue)<batch_size:
+            if len(worker_index_queue)<10:
                 x = next(iter(loader[worker_idx]))
                 worker_index_queue.append(x)
                 #print("fill worker[",worker_idx,"] queue. len=",len(worker_index_queue))
+                #sys.stdout.flush()
             #print("worker queue len=",len(worker_index_queue))
-            #sys.stdout.flush()
+
             continue
 
 
@@ -103,11 +106,12 @@ class larmaeMultiProcessDataloader():
 
     def prefetch(self):
         print("prefetch")
-        while (self.prefetch_index < self.batch_size):
-            # if the prefetch_index hasn't reached the end of the dataset
-            # and it is not 2 batches ahead, add indexes to the index queues
-            self.index_queues[next(self.worker_cycle)].put(self.prefetch_index)
-            self.prefetch_index += 1            
+        #while (self.prefetch_index < self.batch_size):
+        #    # if the prefetch_index hasn't reached the end of the dataset
+        #    # and it is not 2 batches ahead, add indexes to the index queues
+        #    self.index_queues[next(self.worker_cycle)].put(self.prefetch_index)
+        #    self.prefetch_index += 1
+        self.index_queues[next(self.worker_cycle)].put(0)
 
     def __iter__(self):
         self.index = 0
@@ -120,8 +124,11 @@ class larmaeMultiProcessDataloader():
         #if self.index >= self.nentries:
         #    raise StopIteration
         print("next")
-        out = [self.get() for _ in range(self.batch_size)]
-        return self.collate_fn(out)
+        #out = [self.get() for _ in range(self.batch_size)]
+        #out = [self.get() for _ in range(1)]
+        #return self.collate_fn(out)
+        out = self.get()
+        return out
 
     def __len__(self):
         return len(self.dataset)
@@ -190,8 +197,8 @@ if __name__ == "__main__":
     config = "config_train.yaml"
     FAKE_NET_RUNTIME = 1.0
     niters = 10
-    batch_size = 32
-    num_workers = 2
+    batch_size = 64
+    num_workers = 6
     loader = larmaeMultiProcessDataloader(config,batch_size,
                                           num_workers=num_workers,
                                           prefetch_batches=1)

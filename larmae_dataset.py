@@ -49,18 +49,13 @@ class larmaeDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         #print("larmaeDataset[",self,"].get[",idx,"]")
-        worker_info = torch.utils.data.get_worker_info()
+        #worker_info = torch.utils.data.get_worker_info()
 
         okentry = False
         num_tries = 0
-        ioffset = self.offset
         if idx==0:
-            # increment the offset for next time
-            self.offset += 1
-        if self.offset>self.nentries:
-                self.offset = 0
-        elif np.random.uniform()<0.01:            
-            self.offset = np.random.randint(0,self.nentries)
+            self.offset = np.random.randint(0,self.nentries)        
+        ioffset = int(self.offset)
                 
         data = {}
         while not okentry:
@@ -68,7 +63,7 @@ class larmaeDataset(torch.utils.data.Dataset):
             entry = idx+ioffset
             if entry>=self.nentries:
                 entry = 0
-                ioffset = 0
+                ioffset = -idx
             self.tree.GetEntry(entry)
             img = self.tree.img_v.at(self.vector_index).tonumpy()
 
@@ -104,8 +99,11 @@ class larmaeDataset(torch.utils.data.Dataset):
 
                             # it's good, so make final scaled image
                             data["img"] = np.clip( (data["img"]-20.0)/50.0, -1.0, 5.0 )
-                    
-            ioffset += 1
+
+            if not okentry:
+                # will need to try again
+                ioffset += 1
+                self.offset += 1
             num_tries += 1
 
         self._nloaded += 1

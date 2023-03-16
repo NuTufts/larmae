@@ -1,7 +1,7 @@
 import os,sys
 import torch
 
-def calc_zero_vs_nonzero_accuracy(pred_patches,true_patches):
+def calc_zero_vs_nonzero_accuracy(pred_patches,true_patches,nonzero_ave_threshold):
     """
     pred_patches (num batches,num masked patches,patch height*width)
     """
@@ -13,7 +13,7 @@ def calc_zero_vs_nonzero_accuracy(pred_patches,true_patches):
     print("patch_sum: ",patch_sum.shape)
 
     # mask of patches with zero sum: true empty
-    zero_sum_mask = (patch_sum==-1.0).reshape( -1 )
+    zero_sum_mask = (patch_sum<=nonzero_ave_threshold).reshape( -1 )
     print("zero_sum_mask: ",zero_sum_mask.shape," sum=",zero_sum_mask.sum())
     if zero_sum_mask.sum()>0:
 
@@ -30,7 +30,7 @@ def calc_zero_vs_nonzero_accuracy(pred_patches,true_patches):
         mse_zero = 0.0
 
     # mask of patches with zero sum: true empty
-    nonzero_sum_mask = (patch_sum!=-1.0).reshape(-1)
+    nonzero_sum_mask = (patch_sum>nonzero_ave_threshold).reshape(-1)
 
     if nonzero_sum_mask.sum()>0:
 
