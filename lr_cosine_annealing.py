@@ -3,7 +3,7 @@ from math import cos
 import numpy as np
 
 def get_learning_rate_cosine_anealing_w_warmup( epoch, T, warmup_epochs,
-                                                lr_min, lr_max, lr_warmup ):
+                                                lr_min, lr_max, lr_warmup, lr_decay_factor ):
     if epoch<warmup_epochs:
         return lr_warmup
 
@@ -15,11 +15,12 @@ def get_learning_rate_cosine_anealing_w_warmup( epoch, T, warmup_epochs,
 
     # if x, past the current period, warm restart.
     while x>1.0:
-        x = (epoch-x_offset)
+        x_offset += Ti # increment the offset
         Ti *= 2 # we double the next period
-        x = x/Ti
-        lr_factor *= 0.707 # we cut the range by 1/sqrt(2)
-        x_offset += Ti
+        x = (epoch-x_offset) # remove the new offset
+        x = x/Ti # normalize by new period
+        lr_factor *= lr_decay_factor # we cut the range
+
 
     lr = lr_factor*(lr_min + 0.5*(lr_max-lr_min)*( 1+cos(x*np.pi) ))
     return lr
