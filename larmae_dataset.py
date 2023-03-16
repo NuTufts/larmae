@@ -54,6 +54,14 @@ class larmaeDataset(torch.utils.data.Dataset):
         okentry = False
         num_tries = 0
         ioffset = self.offset
+        if idx==0:
+            # increment the offset for next time
+            self.offset += 1
+        if self.offset>self.nentries:
+                self.offset = 0
+        elif np.random.uniform()<0.01:            
+            self.offset = np.random.randint(0,self.nentries)
+                
         data = {}
         while not okentry:
             okentry = False

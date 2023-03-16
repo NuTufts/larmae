@@ -7,17 +7,20 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from larmae_dataset import larmaeDataset
-import samplers
+#import samplers
 
 def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_size):
 
     shuffle = True
-    sampler = samplers.RandomSequenceSampler.create( len(dataset), batch_size, seed=worker_idx )
     dataset = {worker_idx: larmaeDataset( data_loader_config, seed=worker_idx )}
     print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
+
     torch.manual_seed( worker_idx )
+    #sampler = torch.utils.data.SequentialSampler( dataset )
+    #sampler = samplers.RandomSequenceSampler.create( len(dataset), batch_size, seed=worker_idx )
+    
     loader = {worker_idx: torch.utils.data.DataLoader(dataset[worker_idx],
-                                                      #num_workers=0,
+                                                      #num_workers=1,
                                                       #persistent_workers=True,
                                                       #sampler=sampler,
                                                       batch_size=1,
@@ -32,7 +35,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
         try:
             # check for request for data
             #print("worker[",worker_idx,"] check request queue")
-            index = index_queue.get(timeout=1000)
+            index = index_queue.get(timeout=0)
 
             if index is None:
                 print("worker[%d] saw index=None. Stop worker."%(worker_idx))
@@ -150,7 +153,7 @@ class larmaeMultiProcessDataloader():
         try:
             for i, w in enumerate(self.workers):
                 self.index_queues[i].put(None)
-                w.join(timeout=5.0)
+                w.join(timeout=1000.0)
             for q in self.index_queues:
                 q.cancel_join_thread()
                 q.close()
@@ -187,8 +190,8 @@ if __name__ == "__main__":
     config = "config_train.yaml"
     FAKE_NET_RUNTIME = 1.0
     niters = 10
-    batch_size = 64
-    num_workers = 8
+    batch_size = 32
+    num_workers = 2
     loader = larmaeMultiProcessDataloader(config,batch_size,
                                           num_workers=num_workers,
                                           prefetch_batches=1)
@@ -208,6 +211,7 @@ if __name__ == "__main__":
         dt_load += dt_iter
 
         # Dump data for debug
+        print("entry: ",batch["entry"])
         if False:
             print("batch: ",batch)
             for ib in range(batch["img"].shape[0]):
