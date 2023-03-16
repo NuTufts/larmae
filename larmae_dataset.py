@@ -12,7 +12,7 @@ import yaml
 from einops.layers.torch import Rearrange
 
 class larmaeDataset(torch.utils.data.Dataset):
-    def __init__(self, cfg_file):
+    def __init__(self, cfg_file, seed=0 ):
         """
         Parameters:
         
@@ -43,6 +43,8 @@ class larmaeDataset(torch.utils.data.Dataset):
         self.nentries = self.tree.GetEntries()
         self._nloaded = 0
         print("larmaeDataset created. TChain=",self.tree)
+        np.random.seed(seed=seed)
+        self.offset = np.random.randint(0,self.nentries)
 
 
     def __getitem__(self, idx):
@@ -51,7 +53,7 @@ class larmaeDataset(torch.utils.data.Dataset):
 
         okentry = False
         num_tries = 0
-        ioffset = 0
+        ioffset = self.offset
         data = {}
         while not okentry:
             okentry = False

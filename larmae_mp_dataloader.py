@@ -7,19 +7,22 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from larmae_dataset import larmaeDataset
+import samplers
 
 def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_size):
 
     shuffle = True
-    dataset = {worker_idx: larmaeDataset( data_loader_config )}
+    sampler = samplers.RandomSequenceSampler.create( len(dataset), batch_size, seed=worker_idx )
+    dataset = {worker_idx: larmaeDataset( data_loader_config, seed=worker_idx )}
     print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
     torch.manual_seed( worker_idx )
     loader = {worker_idx: torch.utils.data.DataLoader(dataset[worker_idx],
                                                       #num_workers=0,
                                                       #persistent_workers=True,
+                                                      #sampler=sampler,
                                                       batch_size=1,
-                                                      worker_init_fn = lambda id: np.random.seed(id+iworker),
-                                                      shuffle=shuffle)}
+                                                      #worker_init_fn = lambda id: np.random.seed(id+iworker),
+                                                      shuffle=False)}
     # internal batch queue
     worker_index_queue = []
     
