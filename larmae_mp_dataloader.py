@@ -9,13 +9,14 @@ from torch.utils.data import Dataset, DataLoader
 from larmae_dataset import larmaeDataset
 #import samplers
 
-def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_size):
+def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, batch_size):
 
+    seed = (rank+1)*(worker_idx+1)
     shuffle = False
-    dataset = {worker_idx: larmaeDataset( data_loader_config, seed=worker_idx )}
+    dataset = {worker_idx: larmaeDataset( data_loader_config, seed=seed )}
     print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
 
-    torch.manual_seed( worker_idx )
+    torch.manual_seed( seed )
     #sampler = torch.utils.data.SequentialSampler( dataset )
     #sampler = samplers.RandomSequenceSampler.create( len(dataset), batch_size, seed=worker_idx )
     
@@ -24,7 +25,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
                                                       #persistent_workers=True,
                                                       #sampler=sampler,
                                                       batch_size=batch_size,
-                                                      worker_init_fn = lambda id: np.random.seed(id+iworker),
+                                                      worker_init_fn = lambda id: np.random.seed(id+seed),
                                                       shuffle=shuffle)}
     # internal batch queue
     worker_index_queue = []
@@ -69,7 +70,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, worker_idx, batch_s
 
 
 class larmaeMultiProcessDataloader():
-    def __init__(self, data_loader_config, batch_size,
+    def __init__(self, data_loader_config, rank, batch_size,
                  num_workers=4,
                  prefetch_batches=3):
 
@@ -94,7 +95,7 @@ class larmaeMultiProcessDataloader():
         for iworker in range(num_workers):
             index_queue = mp.Queue()
             worker = mp.Process(
-                target=worker_fn, args=(self.data_loader_config, index_queue, self.output_queue, iworker, self.batch_size)
+                target=worker_fn, args=(self.data_loader_config, index_queue, self.output_queue, rank, iworker, self.batch_size)
             )
             worker.daemon = True
             worker.start()

@@ -24,15 +24,16 @@ from utils import save_checkpoint
 import wandb
 
 START_ITER = 0
-NITERS = 100000
-NITERS_PER_CHECKPOINT=10000
+NITERS = 1000000000
+NITERS_PER_CHECKPOINT=2000
+NITERS_PER_MODEL_LOG = 500
+NITERS_PER_LOG = 10
 WANDB_PROJECT="larmae-dev"
 LOG_WANDB = True
 LR = 1.0e-6
 weight_decay=5.0e-2
 batch_size = 64
-num_workers=4
-NITERS_PER_LOG = 10
+num_workers=2
 Tbase = 1.0
 warmup_epochs = 1.0
 lr_min = 1.0e-6
@@ -40,6 +41,7 @@ lr_max = 1.0e-4
 lr_warmup = 1.0e-6
 lr_decay_factor = 0.88
 nonzero_patchave_threshold = -0.4
+nonzero_pixel_threshold = -0.2
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
 
@@ -97,9 +99,11 @@ def run(gpu,args):
 
     mae = MAE(
         encoder = v,
-        masking_ratio = 0.10,
+        masking_ratio = 0.50,
         decoder_dim = 512,
-        decoder_depth = 6
+        decoder_depth = 6,
+        weight_by_pixel=True,
+        nonzero_pixel_threshold=nonzero_pixel_threshold
     ).to(DEVICE)
 
     mae_ntrainable  = sum(p.numel() for p in mae.parameters() if p.requires_grad)
@@ -116,12 +120,14 @@ def run(gpu,args):
     sys.stdout.flush()
     torch.distributed.barrier()
 
-    loader = larmaeMultiProcessDataloader(args.config_file,batch_size,
+    loader = larmaeMultiProcessDataloader(args.config_file, rank, batch_size,
                                           num_workers=num_workers,
 	                                  prefetch_batches=1)
     nentries = len(loader)
+    iters_per_epoch = int(nentries/(batch_size*args.gpus))
     
-    print("RANK-%d Start Data Loader. Number of entries: ",nentries)
+    print("RANK-%d Start Data Loader. Number of entries: "%(rank),nentries)
+    print("RANK-%d Iters per epoch: "%(rank),iters_per_epoch)
     shuffle = True
 
     
@@ -131,10 +137,13 @@ def run(gpu,args):
                                   weight_decay=weight_decay)
 
 
+    if rank==0 and LOG_WANDB:
+        wandb.watch( mae, log='all', log_freq=NITERS_PER_MODEL_LOG )
+    
     start = time.time()
     for iiter in range(START_ITER,START_ITER+NITERS):
 
-        epoch = float(iiter*batch_size)/float(nentries)
+        epoch = float(iiter)/float(iters_per_epoch)
         
         v.train()
         optimizer.zero_grad(set_to_none=True)
@@ -180,7 +189,7 @@ def run(gpu,args):
             
                 acc_dict2 = calc_occupied_pixel_accuracies( pred_masked.detach(), 
                                                             true_masked.detach(),
-                                                            occupied_threshold=nonzero_patchave_threshold )
+                                                            occupied_threshold=nonzero_pixel_threshold )
                 acc.update(acc_dict2)
 
             # grab items into 
