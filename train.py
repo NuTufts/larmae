@@ -35,7 +35,7 @@ weight_decay=5.0e-2
 batch_size = 64
 num_workers=2
 Tbase = 1.0
-warmup_epochs = 1.0
+warmup_epochs = 2.0
 lr_min = 1.0e-6
 lr_max = 1.0e-4
 lr_warmup = 1.0e-6
@@ -132,7 +132,7 @@ def run(gpu,args):
 
     
     lr = LR
-    optimizer = torch.optim.AdamW(v.parameters(),
+    optimizer = torch.optim.AdamW(mae.parameters(),
                                   lr=lr,
                                   weight_decay=weight_decay)
 
