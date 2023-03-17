@@ -32,6 +32,7 @@ class larmaeDataset(torch.utils.data.Dataset):
         self.min_crop_pixels = self.cfg.get("min_crop_pixels",1000)
         self.patch_dims = self.cfg.get("patch_dims",16)
         self.vector_index = self.cfg.get("vector_index",0)
+        self.use_old_root2numpy = self.cfg.get("use_old_root2numpy",False)
         self.nonzero_patch_threshold = self.cfg.get("nonzero_patch_threshold",10) # our of 1024 patches for 512x512 image
         
         self.tree = rt.TChain("extbnb_images")
@@ -63,9 +64,20 @@ class larmaeDataset(torch.utils.data.Dataset):
             entry = idx+ioffset
             if entry>=self.nentries:
                 entry = 0
-                ioffset = -idx
+                # reset the offset to work at the beginning of the file
+                self.offset = -idx
+                ioffset = self.offset
             self.tree.GetEntry(entry)
-            img = self.tree.img_v.at(self.vector_index).tonumpy()
+
+            if self.use_old_root2numpy:
+                # old style, memory leak?
+                img = np.copy(self.tree.img_v.at(self.vector_index).tonumpy_nocopy())
+            else:
+                # new style, python owns the object
+                rootarr = self.tree.img_v.at(self.vector_index)
+                shape = [ rootarr.shape[i] for i in range(rootarr.ndims) ]
+                img = np.empty( shape, dtype=np.float64 )
+                rootarr.into_numpy2d(img)
 
             cropok = False
             croptries = 0

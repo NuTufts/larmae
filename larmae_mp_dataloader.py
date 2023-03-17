@@ -198,7 +198,7 @@ if __name__ == "__main__":
     config = "config_train.yaml"
     FAKE_NET_RUNTIME = 1.0
     niters = 10
-    batch_size = 4
+    batch_size = 64
     num_workers = 1
     rank = 0
     loader = larmaeMultiProcessDataloader(config, rank, batch_size,
