@@ -20,6 +20,7 @@ from larmae_mp_dataloader import larmaeMultiProcessDataloader
 from lr_cosine_annealing import get_learning_rate_cosine_anealing_w_warmup
 from calc_accuracies import calc_zero_vs_nonzero_accuracy,calc_occupied_pixel_accuracies
 from utils import save_checkpoint
+from model import load_model
 
 import wandb
 
@@ -86,25 +87,26 @@ def run(gpu,args):
     torch.cuda.set_device(gpu)
     DEVICE = torch.device("cuda:%d"%(gpu) if torch.cuda.is_available() else "cpu")
 
-    v = ViT(
-        image_size = 512,
-        channels = 1,
-        patch_size = 16,
-        num_classes = 5,
-        dim = 1024,
-        depth = 6,
-        heads = 8,
-        mlp_dim = 2048
-    )
+    mae = load_model( args.cfg ).to(DEVICE)
+    # v = ViT(
+    #     image_size = 512,
+    #     channels = 1,
+    #     patch_size = 16,
+    #     num_classes = 5,
+    #     dim = 1024,
+    #     depth = 6,
+    #     heads = 8,
+    #     mlp_dim = 2048
+    # )
 
-    mae = MAE(
-        encoder = v,
-        masking_ratio = 0.50,
-        decoder_dim = 512,
-        decoder_depth = 6,
-        weight_by_pixel=True,
-        nonzero_pixel_threshold=nonzero_pixel_threshold
-    ).to(DEVICE)
+    # mae = MAE(
+    #     encoder = v,
+    #     masking_ratio = 0.50,
+    #     decoder_dim = 512,
+    #     decoder_depth = 6,
+    #     weight_by_pixel=True,
+    #     nonzero_pixel_threshold=nonzero_pixel_threshold
+    # ).to(DEVICE)
 
     mae_ntrainable  = sum(p.numel() for p in mae.parameters() if p.requires_grad)
     print("MAE num trainable pars: ",mae_ntrainable)
