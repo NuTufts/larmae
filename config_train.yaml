@@ -1,5 +1,6 @@
 model:
   checkpoint_file: "/n/home01/twongjirad/larmae/arxiv/silvery-cosmos-16/checkpoint.larmae.42000th.tar"
+#  checkpoint_file: "arxiv/silvery-cosmos-16/checkpoint.42000th.tar"
 training_params:
   start_iter: 0
   num_iters: 100000

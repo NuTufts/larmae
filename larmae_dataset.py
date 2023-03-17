@@ -58,7 +58,14 @@ class larmaeDataset(torch.utils.data.Dataset):
             self.offset = np.random.randint(0,self.nentries)        
         ioffset = int(self.offset)
                 
-        data = {}
+        #data = {} # avoid dictionaries -- memory leak issue due to reference counts when multi-processing?
+        # https://github.com/pytorch/pytorch/issues/13246
+        
+        # what we return, as a tuple
+        img = None
+        entry = None
+        num_non_zero = None
+        
         while not okentry:
             okentry = False
             entry = idx+ioffset
@@ -76,7 +83,7 @@ class larmaeDataset(torch.utils.data.Dataset):
                 # new style, python owns the object
                 rootarr = self.tree.img_v.at(self.vector_index)
                 shape = [ rootarr.shape[i] for i in range(rootarr.ndims) ]
-                img = np.empty( shape, dtype=np.float64 )
+                img = np.empty( shape, dtype=np.float32 )
                 rootarr.into_numpy2d(img)
 
             cropok = False
@@ -90,10 +97,10 @@ class larmaeDataset(torch.utils.data.Dataset):
 
                 crop = img[x:x+self.cropsize,y:y+self.cropsize]
                 if (crop[crop>self.adc_threshold]).sum()>self.min_crop_pixels:
-                    data["img"] = np.expand_dims( crop, axis=0 ) # change to (1,H,W)
-                    data["entry"] = entry
+                    #data["img"] = np.expand_dims( crop, axis=0 ) # change to (1,H,W)
+                    cropresize = np.expand_dims( crop, axis=0 ) # change to (1,H,W)
 
-                    tensor = torch.from_numpy( np.expand_dims(data["img"],axis=0) ) # expand to (1,1,H,W)
+                    tensor = torch.from_numpy( np.expand_dims(cropresize,axis=0) ) # expand to (1,1,H,W)
 
                     # calc nonzero patches: determines if we return crop
                     with torch.no_grad():
@@ -104,13 +111,15 @@ class larmaeDataset(torch.utils.data.Dataset):
                         #print("patchsum: ",patchsum)
                         num_non_zero = (patchsum>10).sum().item() # float
                         #print(num_non_zero)
-                        data["num_nonzero_patches"] = num_non_zero
+                        #data["num_nonzero_patches"] = num_non_zero
                         if num_non_zero >= self.nonzero_patch_threshold:
                             cropok = True
                             okentry = True
 
                             # it's good, so make final scaled image
-                            data["img"] = np.clip( (data["img"]-20.0)/50.0, -1.0, 5.0 )
+                            #data["img"] = np.clip( (data["img"]-20.0)/50.0, -1.0, 5.0 )
+                            del img
+                            img = np.clip( (cropresize-20.0)/50.0, -1.0, 5.0 )
 
             if not okentry:
                 # will need to try again
@@ -120,7 +129,7 @@ class larmaeDataset(torch.utils.data.Dataset):
 
         self._nloaded += 1
 
-        return data
+        return img,entry,num_non_zero
 
 
     def __len__(self):
@@ -142,6 +151,11 @@ class larmaeDataset(torch.utils.data.Dataset):
         print("larmaeDataset")
         print("  number loaded: ",self._nloaded)
 
+    def collate_fn(batch):
+        x = torch.utils.data.dataloader.default_collate(batch)
+        # for user ease
+        return {"img":x[0],"entry":x[1],"num_nonzero_patches":x[2]}
+
     
 if __name__ == "__main__":
     
@@ -149,26 +163,33 @@ if __name__ == "__main__":
     from larcv import larcv
     larcv.load_pyutil()
 
+    from psutil import Process    
+
     cfg = """\
 larmaeDataset:
   filelist:
-    - test.root
+#    - /cluster/tufts/wongjiradlabnu/twongj01/larmae/dataprep/data/mcc9_v29e_dl_run3_G1_extbnb_dlana/larmaedata_run3extbnb_0000.root
+#    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_0000.root
+#    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_*.root
+    - larmaedata_run3extbnb_0000.root
   crop_size: 512
   adc_threshold: 10.0
   min_crop_pixels: 1000
+  vector_index: 0
+  use_old_root2numpy: False
 """
 
     with open('tmp.yaml','w') as f:
         print(cfg,file=f)
     
     niter = 10
-    batch_size = 4
+    batch_size = 64
     test = larmaeDataset( 'tmp.yaml' )
     print("NENTRIES: ",len(test))
-    shuffle = True
+    shuffle = False
     
-    loader = torch.utils.data.DataLoader(test,batch_size=batch_size,shuffle=shuffle)
-                                         #collate_fn=larmDataset.collate_fn)
+    loader = torch.utils.data.DataLoader(test,batch_size=batch_size,shuffle=shuffle,
+                                         collate_fn=larmaeDataset.collate_fn)
 
     start = time.time()
     for iiter in range(niter):
@@ -192,6 +213,7 @@ larmaeDataset:
         #    print(" batch[",b,"]: non-zero patches = ",(y[b,:]>10).sum())
         #print(y.shape)
         print(batch["num_nonzero_patches"])
+        print("main process: %.03f"%(Process().memory_info().rss/1.0e9)," GB")
         
     end = time.time()
     elapsed = end-start

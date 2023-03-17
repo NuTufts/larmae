@@ -7,32 +7,39 @@ from itertools import cycle
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from larmae_dataset import larmaeDataset
-#import samplers
+import gc
+
+from psutil import Process
 
 def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, batch_size):
+    # no dictionary
 
     seed = (rank+1)*(worker_idx+1)
     shuffle = False
-    dataset = {worker_idx: larmaeDataset( data_loader_config, seed=seed )}
-    print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])
+    #dataset = {worker_idx: larmaeDataset( data_loader_config, seed=seed )}
+    #print("worker[%d] dataset: "%(worker_idx),dataset[worker_idx])    
+    dataset = larmaeDataset( data_loader_config, seed=seed )
+    print("worker[%d] dataset: "%(worker_idx),dataset)
 
     torch.manual_seed( seed )
-    #sampler = torch.utils.data.SequentialSampler( dataset )
-    #sampler = samplers.RandomSequenceSampler.create( len(dataset), batch_size, seed=worker_idx )
     
-    loader = {worker_idx: torch.utils.data.DataLoader(dataset[worker_idx],
-                                                      #num_workers=1,
-                                                      #persistent_workers=True,
-                                                      #sampler=sampler,
-                                                      batch_size=batch_size,
-                                                      worker_init_fn = lambda id: np.random.seed(id+seed),
-                                                      shuffle=shuffle)}
+    #loader = {worker_idx: torch.utils.data.DataLoader(dataset[worker_idx],
+    #                                                  batch_size=batch_size,
+    #                                                  worker_init_fn = lambda id: np.random.seed(id+seed),
+    #                                                  shuffle=shuffle)}
+
+    loader = torch.utils.data.DataLoader(dataset,
+                                         batch_size=batch_size,
+                                         worker_init_fn = lambda id: np.random.seed(id+seed),
+                                         collate_fn=larmaeDataset.collate_fn,
+                                         shuffle=shuffle)
     # internal batch queue
-    worker_index_queue = []
+    worker_index_queue = [] # this list causing mem leaks?
     
     while True:
         # Worker function loop, simply reads indices from index_queue, and adds the
         # dataset element to the output_queue
+        
         try:
             # check for request for data
             #print("worker[",worker_idx,"] check request queue")
@@ -49,10 +56,13 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                 x = worker_index_queue.pop()
             else:
                 print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
-                x = next(iter(loader[worker_idx]))
+                #x = next(iter(loader[worker_idx]))
+                x = next(iter(loader))
 
             #print("worker[%d] queueing index="%(worker_idx),index," with loader=",loader[worker_idx])                
             output_queue.put((index,x))
+            print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
+            #print("gc: count=",gc.get_count())
             #sys.stdout.flush()
             continue
             
@@ -60,9 +70,12 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
             #print("no request. fill worker queue")
             #if len(worker_index_queue)<batch_size:
             if len(worker_index_queue)<10:
-                x = next(iter(loader[worker_idx]))
+                #x = next(iter(loader[worker_idx]))
+                x = next(iter(loader))                
                 worker_index_queue.append(x)
-                #print("fill worker[",worker_idx,"] queue. len=",len(worker_index_queue))
+                print("fill worker[",worker_idx,"] queue. len=",len(worker_index_queue))
+                print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
+                #print("gc: count=",gc.get_count())                
                 #sys.stdout.flush()
             #print("worker queue len=",len(worker_index_queue))
 
@@ -194,12 +207,14 @@ class larmaeMultiProcessDataloader():
 if __name__ == "__main__":
     
     import yaml
+    from larcv import larcv
+    larcv.load_pyutil()
     
     config = "config_train.yaml"
-    FAKE_NET_RUNTIME = 1.0
-    niters = 10
-    batch_size = 1
-    num_workers = 1
+    FAKE_NET_RUNTIME = 0.250
+    niters = 20000
+    batch_size = 64
+    num_workers = 2
     rank = 0
     loader = larmaeMultiProcessDataloader(config, rank, batch_size,
                                           num_workers=num_workers,
@@ -219,9 +234,14 @@ if __name__ == "__main__":
         dt_iter = time.time()-dt_iter
         dt_load += dt_iter
 
+        print("main process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))        
+        if FAKE_NET_RUNTIME>0:
+            print("pretend network: lag=",FAKE_NET_RUNTIME)
+            time.sleep( FAKE_NET_RUNTIME )
+        
         # Dump data for debug
         print("entry: ",batch["entry"])
-        if True:
+        if False:
             print("batch: ",batch)
             print(batch["entry"])
             for ib in range(batch["img"].shape[0]):
@@ -230,9 +250,6 @@ if __name__ == "__main__":
                 x = batch["img"][ib].reshape(-1)
                 print(x[x>-0.4][:10])
                 
-        if FAKE_NET_RUNTIME>0:
-            print("pretend network: lag=",FAKE_NET_RUNTIME)
-            time.sleep( FAKE_NET_RUNTIME )
     print("MADE IT")
     print("loading time per iteration: ",dt_load/float(niters))
     end = time.time()

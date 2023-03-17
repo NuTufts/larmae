@@ -40,6 +40,7 @@ def load_model( cfg, strict=False, remove_ddp_prefix=True ):
 
     checkpoint = model_cfg.get("checkpoint_file",None)
     if checkpoint is not None:
+        print("Loading checkpoint file: ",checkpoint)
         if not os.path.exists(str(checkpoint)):
             raise ValueError("Could not load the checkpoint file give: %s"%(checkpoint))
         loc = {}
