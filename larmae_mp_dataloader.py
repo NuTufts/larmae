@@ -34,7 +34,13 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                                          collate_fn=larmaeDataset.collate_fn,
                                          shuffle=shuffle)
     # internal batch queue
-    worker_index_queue = [] # this list causing mem leaks?
+    #worker_index_queue = [] # this list causing mem leaks?
+
+    # this is so stupid
+    current_buffer = -1
+    worker_buffer_0 = None
+    worker_buffer_1 = None
+    worker_buffer_2 = None
     
     while True:
         # Worker function loop, simply reads indices from index_queue, and adds the
@@ -51,9 +57,14 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                 #sys.stdout.flush()
                 break
             
-            if len(worker_index_queue)>0:
-                print("worker[",worker_idx,"] index[",index,"] using internal queue. len=",len(worker_index_queue))
-                x = worker_index_queue.pop()
+            if current_buffer>=0:
+                print("worker[",worker_idx,"] index[",index,"] using internal queue. buffer=",current_buffer)
+                if current_buffer==0:
+                    x = worker_buffer_0
+                elif current_buffer==1:
+                    x = worker_buffer_1
+                elif current_buffer==2:
+                    x = worker_buffer_2
             else:
                 print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
                 #x = next(iter(loader[worker_idx]))
@@ -61,6 +72,19 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
 
             #print("worker[%d] queueing index="%(worker_idx),index," with loader=",loader[worker_idx])                
             output_queue.put((index,x))
+
+            if current_buffer>=0:
+                # replace buffer with None and deref last ref x
+                if current_buffer==0:
+                    worker_buffer_0 = None
+                elif current_buffer==1:
+                    worker_buffer_1 = None
+                elif current_buffer==2:
+                    worker_buffer_2 = None
+                del x
+                current_buffer -= 1
+
+            gc.collect()
             print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
             #print("gc: count=",gc.get_count())
             #sys.stdout.flush()
@@ -69,11 +93,17 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
         except queue.Empty:
             #print("no request. fill worker queue")
             #if len(worker_index_queue)<batch_size:
-            if len(worker_index_queue)<10:
+            if current_buffer<2:
                 #x = next(iter(loader[worker_idx]))
-                x = next(iter(loader))                
-                worker_index_queue.append(x)
-                print("fill worker[",worker_idx,"] queue. len=",len(worker_index_queue))
+                current_buffer += 1
+                if current_buffer==0:
+                    worker_buffer_0 = next(iter(loader))
+                elif current_buffer==1:
+                    worker_buffer_1 = next(iter(loader))
+                elif current_buffer==2:
+                    worker_buffer_2 = next(iter(loader))
+
+                print("fill worker[",worker_idx,"] buffer idx=",current_buffer)
                 print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
                 #print("gc: count=",gc.get_count())                
                 #sys.stdout.flush()
