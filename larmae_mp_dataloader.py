@@ -242,7 +242,7 @@ if __name__ == "__main__":
     
     config = "config_train.yaml"
     FAKE_NET_RUNTIME = 0.250
-    niters = 20000
+    niters = 10
     batch_size = 64
     num_workers = 2
     rank = 0
