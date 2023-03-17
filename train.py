@@ -24,7 +24,7 @@ from model import load_model
 
 import wandb
 
-START_ITER = 0
+START_ITER = 42001
 NITERS = 1000000000
 NITERS_PER_CHECKPOINT=2000
 NITERS_PER_MODEL_LOG = 500
@@ -43,6 +43,7 @@ lr_warmup = 1.0e-6
 lr_decay_factor = 0.88
 nonzero_patchave_threshold = -0.4
 nonzero_pixel_threshold = -0.2
+resume_optimizer_state = True
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
 
@@ -80,14 +81,14 @@ def run(gpu,args):
         sys.stdout.flush()
 
     # turn the config file into a yaml object
-    #with open(args.config_file,'r') as f:
-    #    cfg = yaml.safe_load(f)
+    with open(args.config_file,'r') as f:
+        cfg = yaml.safe_load(f)
 
     # set device
     torch.cuda.set_device(gpu)
     DEVICE = torch.device("cuda:%d"%(gpu) if torch.cuda.is_available() else "cpu")
 
-    mae = load_model( args.cfg ).to(DEVICE)
+    mae = load_model( args.config_file ).to(DEVICE)
     # v = ViT(
     #     image_size = 512,
     #     channels = 1,
@@ -138,6 +139,14 @@ def run(gpu,args):
                                   lr=lr,
                                   weight_decay=weight_decay)
 
+    if resume_optimizer_state:
+        ckptfile = cfg.get("model").get("checkpoint_file",None)
+        if ckptfile is not None:
+            checkpoint_data = torch.load( ckptfile )
+            optimizer.load_state_dict( checkpoint_data["optimizer"] )
+        else:
+            raise ValueError("Could not load checkpoint file to resume optimizer state")
+
 
     if rank==0 and LOG_WANDB:
         wandb.watch( mae, log='all', log_freq=NITERS_PER_MODEL_LOG )
@@ -147,7 +156,7 @@ def run(gpu,args):
 
         epoch = float(iiter)/float(iters_per_epoch)
         
-        v.train()
+        mae.train()
         optimizer.zero_grad(set_to_none=True)
         if rank==0:
             print("====================================")
@@ -209,7 +218,7 @@ def run(gpu,args):
 
             # pass to wandb server
             if LOG_WANDB and rank==0:
-                wandb.log( logged )
+                wandb.log( logged, step=int(iiter/NITERS_PER_LOG) )
 
         # check pointing
         if rank==0 and iiter>START_ITER and iiter%NITERS_PER_CHECKPOINT==0:

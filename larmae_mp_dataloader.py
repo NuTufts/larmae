@@ -1,9 +1,9 @@
 import os,time,copy,sys
+import torch
 #import multiprocessing
 import torch.multiprocessing as mp
 import queue
 from itertools import cycle
-import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from larmae_dataset import larmaeDataset
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     config = "config_train.yaml"
     FAKE_NET_RUNTIME = 1.0
     niters = 10
-    batch_size = 64
+    batch_size = 1
     num_workers = 1
     rank = 0
     loader = larmaeMultiProcessDataloader(config, rank, batch_size,
@@ -221,10 +221,14 @@ if __name__ == "__main__":
 
         # Dump data for debug
         print("entry: ",batch["entry"])
-        if False:
+        if True:
             print("batch: ",batch)
+            print(batch["entry"])
             for ib in range(batch["img"].shape[0]):
                 print("img[",ib,"] check: ",batch["img"][ib,:].sum())
+                print("nonzero dump: ")
+                x = batch["img"][ib].reshape(-1)
+                print(x[x>-0.4][:10])
                 
         if FAKE_NET_RUNTIME>0:
             print("pretend network: lag=",FAKE_NET_RUNTIME)
