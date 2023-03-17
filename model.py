@@ -5,7 +5,7 @@ import torch
 from vit_pytorch import ViT, MAE
 
 
-def load_model( cfg, strict=False ):
+def load_model( cfg, strict=False, remove_ddp_prefix=True ):
 
     if type(cfg) is str:
         with open(cfg,'r') as f:
@@ -47,7 +47,15 @@ def load_model( cfg, strict=False ):
             loc["cuda:%d"%(i)] = "cpu"
         data = torch.load( checkpoint, map_location=loc )
         print("checkpoint file contents: ",data.keys())
-        missing, extra = mae.load_state_dict( data["state_mae"], strict=strict )
+        model_state = data["state_mae"]
+        rename_dict = {}
+        for k,t in model_state.items():
+            if remove_ddp_prefix and "module." in k:
+                k_new = k.replace("module.","")
+                rename_dict[k_new] = t
+            else:
+                rename_dict[k] = t
+        missing, extra = mae.load_state_dict( rename_dict, strict=strict )
 
     return mae
 
