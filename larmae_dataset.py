@@ -86,7 +86,7 @@ class larmaeDataset(torch.utils.data.Dataset):
                     # calc nonzero patches: determines if we return crop
                     with torch.no_grad():
                         #print("tensor: ",tensor.shape)
-                        patches = self.chunk( tensor ) # returns (1,num_patches,patchdim1*patchdim2)
+                        patches = self._chunk( tensor ) # returns (1,num_patches,patchdim1*patchdim2)
                         #print("patches: ",patches)
                         patchsum = torch.sum(patches,2).squeeze() # (num_patches)
                         #print("patchsum: ",patchsum)
@@ -114,14 +114,18 @@ class larmaeDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.nentries
 
-    def chunk(self,x):
+    def _chunk(self,x):
         #print(x.shape)
         layer = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = self.patch_dims, p2 = self.patch_dims)
         x = layer(x)
-        #print(x.shape)
-        
+        #print(x.shape)        
         return x
 
+    def chunk(x,patch_dims):
+        layer = Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)',p1=patch_dims, p2=patch_dims)
+        x = layer(x)
+        return x
+    
     def print_status(self):
         print("larmaeDataset")
         print("  number loaded: ",self._nloaded)
