@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=larmae
 #SBATCH --output=gridlog_larmae.log
-#SBATCH --mem-per-gpu=16g
+#SBATCH --mem-per-gpu=24g
 #SBATCH --cpus-per-gpu=4
 #SBATCH --time=6-00:00:00
 #SBATCH --gres=gpu:4

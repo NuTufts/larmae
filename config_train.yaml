@@ -1,5 +1,7 @@
 model:
-  checkpoint_file: "/n/home01/twongjirad/larmae/arxiv/silvery-cosmos-16/checkpoint.larmae.42000th.tar"
+  checkpoint_file: "/n/home01/twongjirad/larmae/arxiv/fallen-snowflake-27/checkpoint.larmae.158000th.tar"
+  weight_by_model: True
+  nonzero_pixel_threshold: -0.2
 training_params:
   start_iter: 0
   num_iters: 100000
@@ -13,8 +15,8 @@ larmaeDataloader:
 larmaeDataset:
   filelist:
 #    - /cluster/tufts/wongjiradlabnu/twongj01/larmae/dataprep/data/mcc9_v29e_dl_run3_G1_extbnb_dlana/larmaedata_run3extbnb_0000.root
-    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_0000.root
-#    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_*.root
+#    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_0000.root
+    - /n/home01/twongjirad/mcc9_v29e_dl_run3_G1_extbnb_dlana/train/larmaedata_run3extbnb_*.root
 #    - larmaedata_run3extbnb_0000.root
   crop_size: 512
   adc_threshold: 10.0

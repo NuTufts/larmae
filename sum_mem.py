@@ -1,14 +1,14 @@
 import os,sys
 tot = 0.0
 
-pawk = os.popen("ps -u$USER -o %cpu,rss,args | awk '{ print $2 }'")
+pawk = os.popen("ps -u$USER -o %cpu,rss,args")
 
 lawk = pawk.readlines()
 
 for l in lawk:
     try:
-        x = float(l.strip())
-        #print(x)
+        x = float(l.strip().split()[1])
+        print(l.strip())
         tot += x
     except:
         print("not a num: ",l.strip())

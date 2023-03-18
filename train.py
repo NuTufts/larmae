@@ -24,7 +24,7 @@ from model import load_model
 
 import wandb
 
-START_ITER = 42001
+START_ITER = 82001
 NITERS = 1000000000
 NITERS_PER_CHECKPOINT=2000
 NITERS_PER_MODEL_LOG = 500
@@ -88,7 +88,7 @@ def run(gpu,args):
     torch.cuda.set_device(gpu)
     DEVICE = torch.device("cuda:%d"%(gpu) if torch.cuda.is_available() else "cpu")
 
-    mae = load_model( args.config_file ).to(DEVICE)
+    mae = load_model( args.config_file, strict=True, remove_ddp_prefix=True ).to(DEVICE)
     # v = ViT(
     #     image_size = 512,
     #     channels = 1,
@@ -142,6 +142,7 @@ def run(gpu,args):
     if resume_optimizer_state:
         ckptfile = cfg.get("model").get("checkpoint_file",None)
         if ckptfile is not None:
+            print("Load optimizer state from checkpoint file: ",ckptfile)
             checkpoint_data = torch.load( ckptfile )
             optimizer.load_state_dict( checkpoint_data["optimizer"] )
         else:
