@@ -26,7 +26,8 @@ class larmaeDataset(torch.utils.data.Dataset):
                 print(exc)
                 
         self.cfg = allcfg.get('larmaeDataset')                
-        filelist = self.cfg.get('filelist',None)
+        filelist = self.cfg.get('files',None)
+        txtfile  = self.cfg.get('filelist',None)
         self.cropsize = self.cfg.get("crop_size",512)
         self.adc_threshold = self.cfg.get("adc_threshold",10.0)
         self.min_crop_pixels = self.cfg.get("min_crop_pixels",1000)
@@ -40,6 +41,15 @@ class larmaeDataset(torch.utils.data.Dataset):
         if filelist is not None:
             for ifile in filelist:
                 self.tree.Add( ifile )
+                
+        if txtfile is not None:
+            if os.path.exists(txtfile):
+                with open(txtfile) as f:
+                    ll = f.readlines()
+                    for l in ll:
+                        if os.path.exists(l.strip()):
+                            #print("add: ",l.strip())
+                            self.tree.Add( l.strip() )
 
         self.nentries = self.tree.GetEntries()
         self._nloaded = 0
@@ -181,12 +191,16 @@ larmaeDataset:
 
     with open('tmp.yaml','w') as f:
         print(cfg,file=f)
+
+    cfg = "tmp.yaml"
+    cfg = "config_train.yaml"
     
     niter = 10
     batch_size = 64
-    test = larmaeDataset( 'tmp.yaml' )
+    test = larmaeDataset( cfg, seed=0 )
     print("NENTRIES: ",len(test))
     shuffle = False
+    sys.exit(0)
     
     loader = torch.utils.data.DataLoader(test,batch_size=batch_size,shuffle=shuffle,
                                          collate_fn=larmaeDataset.collate_fn)
