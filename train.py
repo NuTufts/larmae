@@ -1,4 +1,4 @@
-import os,sys,time,argparse
+import os,sys,time,argparse,gc
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,8 +14,8 @@ from torchvision import transforms, utils
 sys.path.append("/n/home01/twongjirad/larmae/vit-pytorch/")
 from vit_pytorch import ViT, MAE
 
-from larmae_dataset import larmaeDataset
-from larmae_mp_dataloader import larmaeMultiProcessDataloader
+from relarmae_dataset import relarmaeDataset
+from relarmae_mp_dataloader import relarmaeMultiProcessDataloader
 
 from lr_cosine_annealing import get_learning_rate_cosine_anealing_w_warmup
 from calc_accuracies import calc_zero_vs_nonzero_accuracy,calc_occupied_pixel_accuracies
@@ -24,7 +24,7 @@ from model import load_model
 
 import wandb
 
-START_ITER = 270001
+START_ITER = 286001
 NITERS = 1000000000
 NITERS_PER_CHECKPOINT=2000
 NITERS_PER_MODEL_LOG = 2000
@@ -34,7 +34,7 @@ LOG_WANDB = True
 LR = 1.0e-6
 weight_decay=5.0e-2
 batch_size = 64
-num_workers=1
+num_workers=2
 Tbase = 1.0
 warmup_epochs = 2.0
 lr_min = 1.0e-6
@@ -44,7 +44,7 @@ lr_decay_factor = 0.88
 nonzero_patchave_threshold = -0.4
 nonzero_pixel_threshold = -0.2
 resume_optimizer_state = True
-use_single_loader = True
+use_single_loader = False
 checkpoint_dir="/n/holystore01/LABS/iaifi_lab/Users/twongjirad/larmae_checkpoints/"
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
@@ -126,9 +126,9 @@ def run(gpu,args):
     torch.distributed.barrier()
 
     if not use_single_loader:
-        loader = larmaeMultiProcessDataloader(args.config_file, rank, batch_size,
-                                              num_workers=num_workers,
-	                                      prefetch_batches=1)
+        loader = relarmaeMultiProcessDataloader(args.config_file, rank,
+                                                num_workers=num_workers,
+                                                prefetch_batches=1)
         nentries = len(loader)
         
     else:
@@ -188,7 +188,7 @@ def run(gpu,args):
         #print(true_masked.shape)
     
         #print("Rank[",rank,"] Num nonzero patches: ",batch["num_nonzero_patches"])
-        print("Rank[",rank,"] Entries: ",batch["entry"])
+        #print("Rank[",rank,"] Entries: ",batch["entry"])
         if rank==0:
             print("Rank[",rank,"] MAE-loss: ",maeloss)
         maeloss.backward()
@@ -238,6 +238,10 @@ def run(gpu,args):
             if LOG_WANDB and rank==0:
                 wandb.log( logged, step=int(iiter/NITERS_PER_LOG) )
 
+            # dump memory usage
+            if rank==0:            
+                print(loader.monitor.table())
+
         # check pointing
         if rank==0 and iiter>START_ITER and iiter%NITERS_PER_CHECKPOINT==0:
             print("RANK-%d: Save Checkpoint"%(rank))
@@ -247,7 +251,8 @@ def run(gpu,args):
                              False, iiter, tag="larmae", 
                              outdir=checkpoint_dir )
 
-    
+        # hail mary
+        gc.collect()
     
     end = time.time()
     elapsed = end-start

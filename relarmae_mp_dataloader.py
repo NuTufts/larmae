@@ -96,7 +96,6 @@ class relarmaeMultiProcessDataloader():
                  prefetch_batches=2):
 
         self.index = 0
-        self.batch_size = batch_size
         self.num_workers = num_workers
         self.prefetch_batches = prefetch_batches
         self.output_queue = mp.Queue()
@@ -118,6 +117,7 @@ class relarmaeMultiProcessDataloader():
             self.datasets.append( relarmaeDataset( data_loader_config, seed=num_workers*rank+iworker ) )
             index_queue = mp.Queue()            
             self.index_queues.append(index_queue)
+        self.nentries = len(self.datasets[0])
                 
         for iworker in range(num_workers):
             worker = mp.Process(
@@ -171,7 +171,7 @@ class relarmaeMultiProcessDataloader():
 
 
     def __len__(self):
-        return len(self.dataset)
+        return self.nentries
 
     def get(self):
         #print("start prefetch")
