@@ -29,6 +29,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
     #                                                  shuffle=shuffle)}
 
     loader = torch.utils.data.DataLoader(dataset,
+                                         #num_workers=2,
                                          batch_size=batch_size,
                                          worker_init_fn = lambda id: np.random.seed(id+seed),
                                          collate_fn=larmaeDataset.collate_fn,
@@ -58,7 +59,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                 break
             
             if current_buffer>=0:
-                print("worker[",worker_idx,"] index[",index,"] using internal queue. buffer=",current_buffer)
+                #print("worker[",worker_idx,"] index[",index,"] using internal queue. buffer=",current_buffer)
                 if current_buffer==0:
                     x = worker_buffer_0
                 elif current_buffer==1:
@@ -66,7 +67,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                 elif current_buffer==2:
                     x = worker_buffer_2
             else:
-                print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
+                #print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
                 #x = next(iter(loader[worker_idx]))
                 x = next(iter(loader))
 
@@ -85,7 +86,7 @@ def worker_fn(data_loader_config, index_queue, output_queue, rank, worker_idx, b
                 current_buffer -= 1
 
             gc.collect()
-            print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
+            #print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
             #print("gc: count=",gc.get_count())
             #sys.stdout.flush()
             continue
@@ -149,7 +150,7 @@ class larmaeMultiProcessDataloader():
         print("prefetch finished")
 
     def prefetch(self):
-        print("prefetch")
+        #print("prefetch")
         #while (self.prefetch_index < self.batch_size):
         #    # if the prefetch_index hasn't reached the end of the dataset
         #    # and it is not 2 batches ahead, add indexes to the index queues
@@ -167,7 +168,7 @@ class larmaeMultiProcessDataloader():
     def __next__(self):
         #if self.index >= self.nentries:
         #    raise StopIteration
-        print("next")
+        #print("next")
         #out = [self.get() for _ in range(self.batch_size)]
         #out = [self.get() for _ in range(1)]
         #return self.collate_fn(out)

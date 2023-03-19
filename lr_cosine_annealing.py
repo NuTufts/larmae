@@ -16,7 +16,7 @@ def get_learning_rate_cosine_anealing_w_warmup( epoch, T, warmup_epochs,
     # if x, past the current period, warm restart.
     while x>1.0:
         x_offset += Ti # increment the offset
-        if Ti<16:
+        if Ti<32:
             Ti *= 2 # we double the length of the next period until period is 16 epochs
         x = (epoch-x_offset) # remove the new offset
         x = x/Ti # normalize by new period

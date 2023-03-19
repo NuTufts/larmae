@@ -1,13 +1,13 @@
 import os,sys
 import torch
 
-def save_checkpoint(state, is_best, p, tag=None):
+def save_checkpoint(state, is_best, p, tag=None, outdir="./"):
 
     stem = "checkpoint"
     if tag is not None:
         stem += ".%s"%(tag)
 
-    filename = "%s.%dth.tar"%(stem,p)
+    filename = outdir+"/%s.%dth.tar"%(stem,p)
     torch.save(state, filename)
     if is_best:
         bestname = "model_best"
