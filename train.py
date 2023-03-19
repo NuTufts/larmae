@@ -24,13 +24,14 @@ from model import load_model
 
 import wandb
 
-START_ITER = 286001
-NITERS = 1000000000
+START_ITER = 0
+NITERS = 10000
 NITERS_PER_CHECKPOINT=2000
 NITERS_PER_MODEL_LOG = 2000
 NITERS_PER_LOG = 10
+NITERS_PER_DATALOADER_RESET = 1000
 WANDB_PROJECT="larmae-dev"
-LOG_WANDB = True
+LOG_WANDB = False
 LR = 1.0e-6
 weight_decay=5.0e-2
 batch_size = 64
@@ -45,7 +46,8 @@ nonzero_patchave_threshold = -0.4
 nonzero_pixel_threshold = -0.2
 resume_optimizer_state = True
 use_single_loader = False
-checkpoint_dir="/n/holystore01/LABS/iaifi_lab/Users/twongjirad/larmae_checkpoints/"
+#checkpoint_dir="/n/holystore01/LABS/iaifi_lab/Users/twongjirad/larmae_checkpoints/"
+checkpoint_dir="/home/twongjirad/working/larbys/larmae/weights_trash"
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
 
@@ -250,6 +252,15 @@ def run(gpu,args):
                               "optimizer":optimizer.state_dict()},
                              False, iiter, tag="larmae", 
                              outdir=checkpoint_dir )
+
+        if iiter%NITERS_PER_DATALOADER_RESET==0 and iiter>START_ITER:
+            print("RANK[%d] reset dataloader"%(iiter))
+            del loader
+            nresets = int(iiter/NITERS_PER_DATALOADER_RESET)
+            loader = relarmaeMultiProcessDataloader(args.config_file, (numresets+1)*(num_workers*args.gpus)+rank,
+                                                    num_workers=num_workers,
+                                                    prefetch_batches=1)
+            
 
         # hail mary
         gc.collect()

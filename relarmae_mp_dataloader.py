@@ -32,12 +32,12 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
             #index = index_queue.get()
 
             if index is None:
-                print("worker[%d] saw index=None. Stop worker."%(worker_idx))
+                #print("worker[%d] saw index=None. Stop worker."%(worker_idx))
                 #sys.stdout.flush()
                 break
             
             if current_buffer>=0:
-                print("worker[",worker_idx,"] index[",index,"] using internal queue. buffer=",current_buffer)
+                #print("worker[",worker_idx,"] index[",index,"] using internal queue. buffer=",current_buffer)
                 if current_buffer==0:
                     x = worker_buffer_0
                 elif current_buffer==1:
@@ -45,7 +45,7 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
                 elif current_buffer==2:
                     x = worker_buffer_2
             else:
-                print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
+                #print("worker[",worker_idx,"] internal queue is empty, get data from loader, idx=",index)
                 x = dataset[0]
 
             #print("worker[%d] queueing index="%(worker_idx),index," with loader=",loader[worker_idx])                
@@ -63,7 +63,7 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
                 current_buffer -= 1
 
             gc.collect()
-            print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
+            #print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
             #print("gc: count=",gc.get_count())
             #sys.stdout.flush()
             continue
@@ -71,7 +71,7 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
         except queue.Empty:
             #print("no request. fill worker queue")
             #if len(worker_index_queue)<batch_size:
-            if current_buffer<2:
+            if current_buffer<1:
                 #x = next(iter(loader[worker_idx]))
                 current_buffer += 1
                 if current_buffer==0:
@@ -81,8 +81,8 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
                 elif current_buffer==2:
                     worker_buffer_2 = dataset[0]
 
-                print("fill worker[",worker_idx,"] buffer idx=",current_buffer)
-                print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
+                #print("fill worker[",worker_idx,"] buffer idx=",current_buffer)
+                #print("worker process mem usage: %0.3f GB"%(Process().memory_info().rss/1.0e9))
                 #print("gc: count=",gc.get_count())                
                 #sys.stdout.flush()
             #print("worker queue len=",len(worker_index_queue))
@@ -93,7 +93,7 @@ def worker_fn(dataset, index_queue, output_queue, worker_idx ):
 class relarmaeMultiProcessDataloader():
     def __init__(self, data_loader_config, rank,
                  num_workers=2,
-                 prefetch_batches=2):
+                 prefetch_batches=1):
 
         self.index = 0
         self.num_workers = num_workers
@@ -102,6 +102,7 @@ class relarmaeMultiProcessDataloader():
         self.index_queues = []
         self.workers = []
         self.worker_cycle = cycle(range(num_workers))
+        self.index_requested = np.zeros( num_workers*prefetch_batches, dtype=np.int )
         self.cache = {}
         self.prefetch_index = 0
         self.nentries = 0
@@ -140,25 +141,25 @@ class relarmaeMultiProcessDataloader():
         print("prefetch finished")
 
     def prefetch(self):
-        print("prefetch")
-        #while (self.prefetch_index < self.batch_size):
-        #    # if the prefetch_index hasn't reached the end of the dataset
-        #    # and it is not 2 batches ahead, add indexes to the index queues
-        #    self.index_queues[next(self.worker_cycle)].put(self.prefetch_index)
-        #    self.prefetch_index += 1
-        self.index_queues[next(self.worker_cycle)].put(0)
+        #print("prefetch")
+        # put out requests to each worker
+        for index in range(self.num_workers):
+            if self.index_requested[index]==0:
+                self.index_queues[index].put(index)
+                self.index_requested[index] = 1
 
     def __iter__(self):
+        # resets things
         self.index = 0
-        self.cache = {}
+        #self.cache = {}
         self.prefetch_index = 0
-        #self.prefetch()
+        self.prefetch()
         return self
 
     def __next__(self):
         #if self.index >= self.nentries:
         #    raise StopIteration
-        print("next")
+        #print("next")
         #out = [self.get() for _ in range(self.batch_size)]
         #out = [self.get() for _ in range(1)]
         #return self.collate_fn(out)
@@ -175,26 +176,70 @@ class relarmaeMultiProcessDataloader():
 
     def get(self):
         #print("start prefetch")
-        #self.prefetch()
-        #print("check cache")        
-        if self.index in self.cache:
-            item = self.cache[self.index]
-            del self.cache[self.index]
-        else:
-            #print("check queue")            
-            while True:
-                try:
-                    (index, data) = self.output_queue.get()
-                except queue.Empty:  # output queue empty, keep trying
-                    continue
-                if index == self.index:  # found our item, ready to return
-                    item = data
-                    break
-                else:  # item isn't the one we want, cache for later
-                    self.cache[index] = data
-        #print("increment index")            
-        self.index += 1
+        self.prefetch()
+        
+        while True:
+            try:
+                (index, data) = self.output_queue.get()
+            except queue.Empty:  # output queue empty, keep trying
+                continue
+            if self.index_requested[index]==1:
+                # found our item, ready to return, reset flag for request outstanding
+                print("get returns requested index=",index)
+                self.index_requested[index] = 0
+                item = data
+                break
+            else:
+                print("found item not requested?")
+                item = data
+                break
+            
         return item
+
+    def restart(self,seed):
+        print("restart")
+        print("queue up None into the request queue")
+        for i, w in enumerate(self.workers):
+            self.index_queues[i].put(None)
+            w.join(timeout=1000.0)
+        for q in self.index_queues:
+            q.cancel_join_thread()
+            q.close()
+        self.output_queue.cancel_join_thread()
+        self.output_queue.close()
+        
+
+        # remake it all
+        del self.datasets
+        del self.monitor
+        del self.pids
+        gc.collect()
+
+        self.pids = []
+        self.pids.append(os.getpid())
+
+        self.datasets = []
+        self.index_queues = []
+        self.workers = []        
+        for iworker in range(self.num_workers):
+            self.datasets.append( relarmaeDataset( self.data_loader_config, seed=seed+iworker ) )
+            index_queue = mp.Queue()            
+            self.index_queues.append(index_queue)
+                
+        for iworker in range(self.num_workers):
+            worker = mp.Process(
+                target=worker_fn, args=(self.datasets[iworker], self.index_queues[iworker], self.output_queue, iworker)
+            )
+            worker.daemon = True
+            worker.start()
+            self.pids.append(worker.pid)            
+            self.workers.append(worker)
+            
+        self.output_queue = mp.Queue()            
+        self.monitor = MemoryMonitor(self.pids)
+        self.prefetch()
+        
+        
 
     def __del__(self):
         try:
