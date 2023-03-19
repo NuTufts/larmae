@@ -26,7 +26,8 @@ class relarmaeDataset(torch.utils.data.Dataset):
                 print(exc)
                 
         self.cfg = allcfg.get('larmaeDataset')                
-        filelist = self.cfg.get('filelist',None)
+        filelist = self.cfg.get('files',None)
+        txtfile  = self.cfg.get('filelist',None)
         
         # every value is a numpy array. will this avoid reference counting problem?
         self.cropsize = np.array( self.cfg.get("crop_size",512), dtype=np.int32 )
@@ -42,13 +43,22 @@ class relarmaeDataset(torch.utils.data.Dataset):
 
         # create ROOT TTree
         self.tree = rt.TChain("extbnb_images")
-        
+
         if filelist is not None:
             for ifile in filelist:
                 self.tree.Add( ifile )
-
+                
+        if txtfile is not None:
+            if os.path.exists(txtfile):
+                with open(txtfile) as f:
+                    ll = f.readlines()
+                    for l in ll:
+                        if os.path.exists(l.strip()):
+                            #print("add: ",l.strip())
+                            self.tree.Add( l.strip() )
+        
         self.nentries = np.array( self.tree.GetEntries(), dtype=np.long )
-        print("larmaeDataset created. TChain=",self.tree)
+        print("[RE]larmaeDataset created. TChain=",self.tree," nentries=",self.nentries)
 
     def randomize_offset(self):
         self.offset[0] = self.rng.randint(0,self.nentries,size=1)

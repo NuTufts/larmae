@@ -166,6 +166,7 @@ class relarmaeMultiProcessDataloader():
         #print("NEXT: ",out)
         #return relarmaeDataset.collate_fn_batch(out)
         self.prefetch()
+        gc.collect()        
         return {"img":x[0],"entry":x[1],"num_nonzero_patches":x[2]}
 
 

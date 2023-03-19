@@ -12,7 +12,7 @@ def process_one_file( checkpoint_file, outfilename, model_key="state_mae", overw
 
 if __name__ == "__main__":
 
-    overwrite = True
+    overwrite = False
     weight_dir = "arxiv/"
     arxiv = os.listdir(weight_dir)
     for darxiv in arxiv:
