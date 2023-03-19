@@ -1,7 +1,7 @@
 import os,sys
 tot = 0.0
 
-pawk = os.popen("ps -u$USER -o %cpu,rss,args")
+pawk = os.popen("ps -u$USER -o %cpu,rss,args | grep python")
 
 lawk = pawk.readlines()
 
