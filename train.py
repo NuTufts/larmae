@@ -24,10 +24,10 @@ from model import load_model
 
 import wandb
 
-START_ITER = 82001
+START_ITER = 158001
 NITERS = 1000000000
 NITERS_PER_CHECKPOINT=2000
-NITERS_PER_MODEL_LOG = 500
+NITERS_PER_MODEL_LOG = 1000
 NITERS_PER_LOG = 10
 WANDB_PROJECT="larmae-dev"
 LOG_WANDB = True
@@ -183,6 +183,8 @@ def run(gpu,args):
         lr = get_learning_rate_cosine_anealing_w_warmup( epoch, Tbase, warmup_epochs,
                                                          lr_min, lr_max, lr_warmup,
                                                          lr_decay_factor )
+        lr = 3.5e-5
+
         # update the optimizer
         for g in optimizer.param_groups:
             g['lr'] = lr
