@@ -269,7 +269,6 @@ def run(gpu,args):
     elapsed = end-start
     sec_per_iter = elapsed/float(NITERS)
     print("sec per iter: ",sec_per_iter)
-    loader.dataset.print_status()
 
     if rank==0 and LOG_WANDB:
         wandb.finish()
