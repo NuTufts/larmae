@@ -34,7 +34,7 @@ LOG_WANDB = True
 LR = 1.0e-6
 weight_decay=5.0e-2
 batch_size = 64
-num_workers=2
+num_workers=1
 Tbase = 1.0
 warmup_epochs = 2.0
 lr_min = 1.0e-6
@@ -44,6 +44,7 @@ lr_decay_factor = 0.88
 nonzero_patchave_threshold = -0.4
 nonzero_pixel_threshold = -0.2
 resume_optimizer_state = True
+use_single_loader = True
 
 logged_list = ['mse_zero','mse_nonzero','zero2zero','zero2occupied','occupied2zero','occupied2occupied']
 
@@ -123,16 +124,23 @@ def run(gpu,args):
     sys.stdout.flush()
     torch.distributed.barrier()
 
-    loader = larmaeMultiProcessDataloader(args.config_file, rank, batch_size,
-                                          num_workers=num_workers,
-	                                  prefetch_batches=1)
+    if not use_single_loader:
+        loader = larmaeMultiProcessDataloader(args.config_file, rank, batch_size,
+                                              num_workers=num_workers,
+	                                      prefetch_batches=1)
+    else:
+        dataset = larmaeDataset( args.config_file, seed=rank )
+        print("RANK[%d] dataset: "%(rank),dataset)
+
+        loader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,shuffle=False,
+                                             collate_fn=larmaeDataset.collate_fn)
+
+    
     nentries = len(loader)
     iters_per_epoch = int(nentries/(batch_size*args.gpus))
     
     print("RANK-%d Start Data Loader. Number of entries: "%(rank),nentries)
     print("RANK-%d Iters per epoch: "%(rank),iters_per_epoch)
-    shuffle = True
-
     
     lr = LR
     optimizer = torch.optim.AdamW(mae.parameters(),
